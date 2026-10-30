@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paper and verified results — Tetris RL Arena</title>
+<meta name="description" content="Abstract, verified results and LaTeX source for the Tetris RL Arena FRP 2026 project.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body class="paper-page">
+<main>
+  <header class="hero">
+    <p class="eyebrow">ISSAI FRP 2026 · Paper summary</p>
+    <h1>Tetris RL Arena: Afterstate Reinforcement Learning under Execution Noise</h1>
+    <div class="authors">Erkenzhe</div>
+    <div class="aff">FRP 2026, AI Engineering track · ISSAI, Nazarbayev University</div>
+    <div class="paper-meta">Verified public summary · 30 October 2026</div>
+    <nav class="paper-nav" aria-label="Page links">
+      <a href="index.html">Project page</a>
+      <a href="replay.html">Interactive replay</a>
+      <a href="paper/tetris-paper-overleaf.zip">LaTeX source (ZIP)</a>
+    </nav>
+  </header>
+
+  <div class="callout"><b>PDF status:</b> the final manuscript exists as a LaTeX package. A compiled PDF is not included in this build because no TeX engine was available on the build machine. The public-safe ZIP below contains the verified manuscript source, tables and figures, but not training code, checkpoints or logs. Compile with <code>pdflatex</code>, <code>bibtex</code>, then <code>pdflatex</code> twice.</div>
+
+  <h2>Abstract</h2>
+  <div class="abstract">
+    <p>We study a small afterstate reinforcement-learning (RL) agent in Tetris, asking whether it can beat a hand-written heuristic, whether training with execution noise makes it more robust to shifted placements, and whether a combo reward changes that robustness. Four agents were trained for the same 23-minute wall-clock budget: lines reward with 0% or 10% training noise, and a combo reward with 0% or 10% training noise. In a first held-out study on piece seeds 6000–6019 (1,600 games), clean RL reached the 2,000-piece cap (797.8 and 796.6 mean lines) and beat the rules agent (740.4). At 5% test noise the clean lines agent was best (165.4 lines), followed by clean combo (140.4), the two noise-trained agents (103.9 and 105.1), and rules (90.1). At 10% test noise the clean agents still led (46.0 and 47.3), rules reached 39.8, and both noise-trained agents reached 38.9. At 20% all five agents collapsed to 12.7–14.3 lines with overlapping intervals. The central hypothesis was not supported: under this budget, 10% training noise did not improve robustness.</p>
+    <p>After that benchmark we found an action-selection mismatch. The noise-trained agents learned an expected value over the left/intended/right execution outcomes, and acted on it during training, but the original evaluation selected placements using only the intended afterstate. A post-hoc diagnostic on the used seeds suggested that expected-noise selection could recover part of the 10% gap. We therefore ran a fresh confirmatory study on unused piece seeds 7100–7119 (2,560 games), evaluating both selection modes on the same games. At 0% the modes are identical by construction (maximum absolute difference 0.0). At 5% expected selection improved clean combo by 60.2 lines (95% CI 29.0–91.2) and combo with 10% training noise by 25.4 lines (10.5–39.3); at 10% it improved lines with 10% training noise by 11.9 lines (5.4–18.6); at 20% it reduced clean lines by 3.7 lines (−5.7 to −1.9). Two diagnostic positives did not replicate on the fresh seeds. The mismatch is real and can be large, so training and evaluation backups must match. It does not, however, overturn the main negative result: at 5% noise, noise-trained agents remain far behind clean agents even under expected selection. A combo reward changes the style of play but is not a robustness intervention.</p>
+  </div>
+
+  <h2>What is in the paper</h2>
+  <div class="cards">
+    <div class="card"><span class="tag">Study 1</span><h3>Five-agent held-out benchmark</h3><p>RulesAgent plus four afterstate RL agents, 20 piece seeds, 1,600 games, four noise rates. Clean RL beats the heuristic; training noise does not help at 5% or 10%.</p></div>
+    <div class="card"><span class="tag">Study 2</span><h3>Intended vs expected selection</h3><p>Fresh seeds 7100–7119, 2,560 games, no retraining. Expected selection can add tens of lines, but the effect depends on model, noise rate and mismatch.</p></div>
+    <div class="card"><span class="tag">Reward</span><h3>Lines vs combo</h3><p>The combo reward raises points and changes the line-clear mix without improving robustness. At 0% noise: 110,145 vs 93,980 points at similar lines.</p></div>
+    <div class="card"><span class="tag">Engineering</span><h3>Small and reproducible</h3><p>C++ engine, four features, 4–64–64–1 value network, afterstate TD, deterministic seeds and recorded JSON replays.</p></div>
+  </div>
+
+  <h2>Study 1 in one table</h2>
+  <div class="table-wrap">
+    <table>
+      <caption>Mean lines over seeds 6000–6019. At 0% noise each agent plays one game per seed; at each positive noise rate each agent plays five noise streams per seed. Cap: 800 lines.</caption>
+      <thead>
+        <tr><th>Agent</th><th>0%</th><th>5%</th><th>10%</th><th>20%</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>RulesAgent</td><td class="num">740.4</td><td class="num">90.1</td><td class="num">39.8</td><td class="num">14.3</td></tr>
+        <tr><td>Lines RL · 0% training</td><td class="num">797.8</td><td class="num">165.4</td><td class="num">46.0</td><td class="num">13.4</td></tr>
+        <tr><td>Combo RL · 0% training</td><td class="num">796.6</td><td class="num">140.4</td><td class="num">47.3</td><td class="num">13.1</td></tr>
+        <tr><td>Lines RL · 10% training</td><td class="num">797.6</td><td class="num">103.9</td><td class="num">38.9</td><td class="num">13.4</td></tr>
+        <tr><td>Combo RL · 10% training</td><td class="num">765.9</td><td class="num">105.1</td><td class="num">38.9</td><td class="num">12.7</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">The hypothesis that 10% training noise improves robustness was not supported. The noise-trained agents also trained on fewer pieces under the same wall-clock budget (about 35% fewer), so budget is a confound.</p>
+
+  <h2>Study 2 in one table</h2>
+  <div class="table-wrap">
+    <table>
+      <caption>Fresh-seed paired differences: expected selection minus intended selection, in mean lines. Positive values favor expected selection. Intervals are 95% paired bootstrap intervals where reported.</caption>
+      <thead>
+        <tr><th>Model</th><th>Noise</th><th>Difference</th><th>95% interval</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Combo RL · 0% training</td><td>5%</td><td class="num">+60.2</td><td class="num">+29.0 to +91.2</td></tr>
+        <tr><td>Combo RL · 10% training</td><td>5%</td><td class="num">+25.4</td><td class="num">+10.5 to +39.3</td></tr>
+        <tr><td>Lines RL · 0% training</td><td>5%</td><td class="num">+25.2</td><td class="num">−21.0 to +67.7</td></tr>
+        <tr><td>Lines RL · 10% training</td><td>5%</td><td class="num">+15.4</td><td class="num">−3.5 to +35.4</td></tr>
+        <tr><td>Lines RL · 10% training</td><td>10%</td><td class="num">+11.9</td><td class="num">+5.4 to +18.6</td></tr>
+        <tr><td>Lines RL · 0% training</td><td>20%</td><td class="num">−3.7</td><td class="num">−5.7 to −1.9</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">The fresh study did not reproduce every post-hoc positive. At 0% the two selection modes are identical by construction. Study 2 is a confirmatory selection study, not a full replication of Study 1, and it has no RulesAgent baseline.</p>
+
+  <figure>
+    <img src="images/fresh_selection.png" alt="Expected-minus-intended selection effect across noise rates and agents, with intervals.">
+    <figcaption>Expected-minus-intended selection effect on fresh seeds. Points are paired mean differences; bars are 95% intervals. The effect is large and positive in some cells, uncertain in others, and negative for clean lines at 20%.</figcaption>
+  </figure>
+
+  <h2>Limitations</h2>
+  <ul class="clean">
+    <li>Twenty seeds per Study 1 condition and one training run per cell. The intervals are descriptive and should not be read as a large-scale significance claim.</li>
+    <li>One execution-noise model: horizontal shifts, with blocked shifts keeping the intended placement. Rotation errors, soft-drop errors, latency and hardware failures are not modelled.</li>
+    <li>Study 2 evaluates the same four trained models on fresh seeds. It is not an independent retraining study and has no heuristic baseline.</li>
+    <li>At 20% noise all agents perform similarly and poorly. The project does not claim a robust high-noise policy.</li>
+    <li>The research repository, training code, checkpoints and raw logs are private. The public artifact contains the page, selected replays and the manuscript source.</li>
+  </ul>
+
+  <h2>Download and compile</h2>
+  <p>The ZIP is a public-safe copy of the final Overleaf package. It contains <code>main.tex</code>, <code>references.bib</code>, the tables and all manuscript figures. It does not contain code, checkpoints or logs.</p>
+  <div class="button-row">
+    <a href="paper/tetris-paper-overleaf.zip">Download LaTeX source (ZIP)</a>
+    <a href="index.html" class="secondary">Back to project</a>
+  </div>
+
+  <div class="callout blue"><b>AI-assistance disclosure:</b> the author used an AI coding assistant (opencode with DeepSeek-V4.1-Flash) to help develop code, run experiments, compute statistics, prepare figures and draft text. The assistant is not an author. Every reported number was traced back to the final result files, and the author remains responsible for the work.</div>
+
+  <footer>Tetris RL Arena · ISSAI FRP 2026 · Static public summary. The compiled PDF is not included in this build.</footer>
+</main>
+</body>
+</html>

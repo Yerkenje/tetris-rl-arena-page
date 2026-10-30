@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tetris RL Arena — FRP 2026</title>
+<meta name="description" content="A small afterstate reinforcement-learning agent for Tetris, evaluated against a hand-written heuristic and under execution noise.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<main>
+  <header class="hero">
+    <p class="eyebrow">ISSAI FRP 2026 · AI Engineering</p>
+    <h1>Can a small RL agent beat a hand-written Tetris player under execution noise?</h1>
+    <div class="authors">Erkenzhe</div>
+    <div class="aff">FRP 2026, AI Engineering track · ISSAI, Nazarbayev University</div>
+    <div class="links">
+      <a href="paper.html">Paper and results</a>
+      <a href="replay.html" class="secondary">Interactive replay</a>
+      <a href="https://github.com/Yerkenje/tetris-rl-arena-page" class="secondary">GitHub (page source)</a>
+    </div>
+    <p class="hero-note">The research repository with training code, checkpoints and raw logs remains private. The public repository contains this static page and the replay viewer.</p>
+  </header>
+
+  <figure class="hero-figure">
+    <img src="images/teaser.jpg" alt="Screenshot of the side-by-side Tetris replay viewer with two boards, score counters and noise controls.">
+    <figcaption>The interactive viewer replays recorded C++ engine simulations side by side. It is not live neural-network inference.</figcaption>
+  </figure>
+
+  <p class="lede"><b>In one sentence:</b> a compact afterstate RL agent beats a hand-written Tetris heuristic at clean play (797.8 vs 740.4 mean lines), but training with 10% execution noise did not make it robust at test time, and the rule used to select moves under a noise model can shift measured performance by tens of lines.</p>
+
+  <div class="stat-grid" aria-label="Key numbers">
+    <div class="stat"><b>797.8</b><span>best clean mean lines, Lines RL at 0% noise; 20 seeds, 800-line cap</span></div>
+    <div class="stat"><b>740.4</b><span>mean lines for the hand-written RulesAgent at 0% noise</span></div>
+    <div class="stat"><b>46.0 vs 38.9</b><span>lines at 10% test noise: clean-trained vs noise-trained Lines RL</span></div>
+    <div class="stat"><b>+60.2</b><span>largest expected-selection gain in Study 2: clean Combo RL at 5% noise, 95% CI 29.0–91.2 lines</span></div>
+  </div>
+
+  <h2>The problem</h2>
+  <p>Tetris is a sequential decision problem with a huge branching factor. A hand-written heuristic that scores holes, height and surface bumpiness is a strong and cheap baseline. Reinforcement learning should be able to improve on it, but a high score in a clean simulator can hide two weaknesses: the policy may not beat a good heuristic, and the score may depend on perfect execution.</p>
+  <p>We study both questions with a small, reproducible setup. The first benchmark, <b>Study 1</b>, evaluates five agents on held-out seeds under the original intended-placement protocol. The second, <b>Study 2</b>, asks a different question on fresh seeds: when the simulator applies execution noise, should the agent choose the move with the best clean value, or the move with the best expected value under the noise model? The two studies are reported separately because they answer different questions.</p>
+
+  <h2>How it works</h2>
+  <div class="steps" aria-label="Pipeline steps">
+    <div><b>1. Engine</b>C++ Tetris with seeded pieces</div>
+    <div><b>2. Placements</b>enumerate legal afterstates</div>
+    <div><b>3. Features</b>four compact board features</div>
+    <div><b>4. Network</b>4 → 64 → 64 → 1 value</div>
+    <div><b>5. Noise</b>train and select under shifts</div>
+  </div>
+  <p>The environment is a C++ 10×20 Tetris engine with the seven standard tetrominoes, a seeded piece sequence and a 2,000-piece cap (800 lines). Python calls into it through a small interface for reset, legal placements, afterstate preview and step. The agent scores every legal placement with four features: cleared lines divided by 4, holes divided by 40, the sum of column heights divided by 200, and surface bumpiness divided by 100.</p>
+  <p>The value network is deliberately small: 4 inputs, two hidden layers of 64 units and one output. Training uses afterstate temporal-difference updates, a discount factor of 0.99, a replay buffer of 50,000 transitions, batches of 256, Adam at 1e-3 and a target network copied every 500 steps. Exploration is epsilon-greedy. The clean-trained agents use no execution noise. The noise-trained agents use 10% training noise and expected-value targets and selection.</p>
+  <p>Execution noise models a failed or blocked shift: with probability <i>p</i>, the intended horizontal shift is replaced by a one-column shift left or right with probability <i>p</i>/2; if that shift is blocked by the wall or a stack, the intended placement is kept. This is intentionally simpler than real input latency, rotation errors or dropped pieces. The distinction between <i>Q</i><sub>int</sub> and <i>Q</i><sub>exp</sub> is the core of the second study.</p>
+
+  <figure>
+    <img src="images/system_pipeline.png" alt="Architecture diagram showing the C++ Tetris engine, Python agent, afterstate features, value network and evaluation loop.">
+    <figcaption>System pipeline: a deterministic C++ engine exposes legal placements to a compact Python afterstate value network. Noise is injected at execution time, not in the piece generator.</figcaption>
+  </figure>
+
+  <h3>The five evaluated agents</h3>
+  <div class="agent-grid">
+    <div class="agent-card rules"><b>RulesAgent</b><span>Hand-coded linear heuristic. No learning. Baseline.</span></div>
+    <div class="agent-card clean"><b>Lines RL · 0%</b><span>Lines reward, clean training, intended selection.</span></div>
+    <div class="agent-card clean"><b>Combo RL · 0%</b><span>Tetris scoring plus combo bonus, clean training.</span></div>
+    <div class="agent-card noise"><b>Lines RL · 10%</b><span>Lines reward, 10% training noise, expected selection.</span></div>
+    <div class="agent-card noise"><b>Combo RL · 10%</b><span>Combo reward, 10% training noise, expected selection.</span></div>
+  </div>
+  <p class="note">All four RL agents share the same network, optimizer and wall-clock budget. RandomAgent is not part of the five-agent comparison.</p>
+
+  <h2>What we found</h2>
+  <div class="cards">
+    <div class="card"><span class="tag">Clean play</span><h3>RL beats the heuristic</h3><p>The best clean agent reaches 797.8 mean lines, 57.4 lines above RulesAgent’s 740.4. Both clean-trained RL agents are close to the 800-line cap.</p></div>
+    <div class="card"><span class="tag">Robustness</span><h3>Noise training is not a free fix</h3><p>At 10% test noise, clean-trained agents score 46.0 and 47.3 lines, while the noise-trained agents score 38.9. At 5% the gap is much larger.</p></div>
+    <div class="card"><span class="tag">Reward design</span><h3>Combo changes style</h3><p>At 0% noise Combo RL earns 110,145 points versus 93,980 for Lines RL with almost the same number of lines, and it uses a different mix of line clears.</p></div>
+    <div class="card"><span class="tag">Selection</span><h3>The evaluation rule matters</h3><p>In Study 2, choosing the move with the best expected noisy value can add 60.2 lines at 5% noise, but the effect is not uniform and does not replicate every Study 1 pattern.</p></div>
+  </div>
+
+  <h2>Study 1: the original five-agent benchmark</h2>
+  <div class="table-wrap">
+    <table>
+      <caption>Mean lines over 20 held-out seeds. At 0% noise each agent plays one game per seed; at each positive rate each agent plays five noise streams per seed (100 games per agent per positive rate). 1,600 games in total. Higher is better. The cap is 800 lines.</caption>
+      <thead>
+        <tr><th>Agent</th><th>0% noise</th><th>5% noise</th><th>10% noise</th><th>20% noise</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>RulesAgent</td><td class="num">740.4</td><td class="num">90.1</td><td class="num">39.8</td><td class="num">14.3</td></tr>
+        <tr><td>Lines RL · 0% training</td><td class="num">797.8</td><td class="num">165.4</td><td class="num">46.0</td><td class="num">13.4</td></tr>
+        <tr><td>Combo RL · 0% training</td><td class="num">796.6</td><td class="num">140.4</td><td class="num">47.3</td><td class="num">13.1</td></tr>
+        <tr><td>Lines RL · 10% training</td><td class="num">797.6</td><td class="num">103.9</td><td class="num">38.9</td><td class="num">13.4</td></tr>
+        <tr><td>Combo RL · 10% training</td><td class="num">765.9</td><td class="num">105.1</td><td class="num">38.9</td><td class="num">12.7</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">The clean-trained agents beat the noise-trained agents at 10% test noise by 7.1 lines for the lines reward (95% CI 2.7–11.2) and 8.4 lines for the combo reward (3.1–15.0). At 5% the gaps are 61.5 and 35.3 lines. The noise-trained agents also used about 35% fewer training pieces under the same wall-clock budget (81k and 79k versus 121k and 128k), so training budget is a confound. At 20% every agent collapses to 12.7–14.3 lines.</p>
+
+  <h2>Study 2: intended vs expected selection on fresh seeds</h2>
+  <p>Study 2 does not retrain anything. It takes the four trained RL agents and evaluates them on seeds 7100–7119 with the same execution-noise model, comparing intended selection <i>Q</i><sub>int</sub> with expected selection <i>Q</i><sub>exp</sub>. The table shows paired mean differences in favor of expected selection; positive values mean the expected-value rule scores higher under the evaluation noise. This study has no RulesAgent baseline and is not a full replication of Study 1.</p>
+  <div class="table-wrap">
+    <table>
+      <caption>Fresh-seed paired differences: expected selection minus intended selection, in mean lines, with 95% paired bootstrap intervals where reported. 2,560 games over 20 seeds and four models.</caption>
+      <thead>
+        <tr><th>Model</th><th>Noise</th><th>Difference in mean lines</th><th>95% interval</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Combo RL · 0% training</td><td>5%</td><td class="num">+60.2</td><td class="num">+29.0 to +91.2</td></tr>
+        <tr><td>Combo RL · 10% training</td><td>5%</td><td class="num">+25.4</td><td class="num">+10.5 to +39.3</td></tr>
+        <tr><td>Lines RL · 0% training</td><td>5%</td><td class="num">+25.2</td><td class="num">−21.0 to +67.7</td></tr>
+        <tr><td>Lines RL · 10% training</td><td>5%</td><td class="num">+15.4</td><td class="num">−3.5 to +35.4</td></tr>
+        <tr><td>Lines RL · 10% training</td><td>10%</td><td class="num">+11.9</td><td class="num">+5.4 to +18.6</td></tr>
+        <tr><td>Lines RL · 0% training</td><td>20%</td><td class="num">−3.7</td><td class="num">−5.7 to −1.9</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">The other 10% and 20% cells were small and uncertain. Two positive post-hoc results from Study 1 did not replicate in Study 2. The safest conclusion is conditional: expected selection can help a lot when the clean policy is badly mismatched to the noise, but it is not a universal improvement and can hurt at high noise.</p>
+
+  <figure>
+    <img src="images/fresh_selection.png" alt="Plot of expected-minus-intended selection effect across noise rates and agents, with 95% intervals.">
+    <figcaption>Expected-minus-intended selection effect in the fresh-seed study. Positive values mean expected selection scores more lines under the evaluation noise model; intervals crossing zero are uncertain.</figcaption>
+  </figure>
+
+  <h3>What the numbers mean</h3>
+  <ul class="clean">
+    <li><b>Clean play:</b> a four-feature afterstate RL agent is enough to beat a hand-written heuristic, and both reward variants are close to the 800-line cap.</li>
+    <li><b>Training noise:</b> under the same wall-clock budget, training with 10% noise did not produce a robust agent. Clean training remained better at 5% and 10% test noise.</li>
+    <li><b>Reward design:</b> the combo reward raises points and changes the line-clear mix, but it does not buy robustness by itself.</li>
+    <li><b>Selection:</b> the expected-value rule can be worth tens of lines, but its benefit depends on the model, the noise rate and the mismatch between training and evaluation.</li>
+    <li><b>High noise:</b> at 20% all agents collapse to roughly 13 lines. Better robustness probably needs test-time adaptation or a stronger noise model, not just more training noise.</li>
+  </ul>
+
+  <h2>Interactive replay viewer</h2>
+  <div class="demo-grid">
+    <figure>
+      <img src="images/demo.jpg" alt="Screenshot of the replay viewer showing a 10% noise comparison, intended-placement ghosts and error navigation buttons.">
+      <figcaption>A recorded 10% noise comparison. The gold ghost is the intended placement; the solid piece is where the shift actually landed.</figcaption>
+    </figure>
+    <div>
+      <p>The viewer has three comparison presets: Original vs Combo at 0% noise, Lines clean vs noise-trained at 10%, and Combo clean vs noise-trained at 10%. Play, pause, step, restart, change speed, seek, or jump to the previous/next successful shift or blocked shift. The intended-placement ghost can be switched off.</p>
+      <div class="button-row">
+        <a href="replay.html">Open the interactive replay</a>
+        <a href="replay.html?pair=lines10&amp;move=57" class="secondary">Jump to a noise event</a>
+      </div>
+      <p class="note">The replays are recorded simulations, not live neural-network inference. They are short demonstration clips, not the 2,000-piece evaluation games, so their scores are not the paper’s means. Manual JSON upload is still supported.</p>
+    </div>
+  </div>
+
+  <h2>Limitations and ethics</h2>
+  <ul class="clean">
+    <li><b>Small sample:</b> 20 seeds per Study 1 condition, one training run per cell, and a single wall-clock budget. The intervals are descriptive, not a large-scale significance study.</li>
+    <li><b>One noise model:</b> horizontal shift failures and blocked shifts only. Rotations, soft drops, latency and hardware errors are not modelled.</li>
+    <li><b>Study 2 is not a full replication:</b> it uses fresh seeds and the same four trained models, has no RulesAgent baseline, and some effects are uncertain.</li>
+    <li><b>No test-time adaptation:</b> the agents do not update online. The expected-value selection rule is an inference-time change, not learning during the game.</li>
+    <li><b>No human data:</b> the project uses a simulator and self-generated games only. There are no private photos, voices or personal records.</li>
+  </ul>
+
+  <h2>Paper and reproducibility</h2>
+  <p>The verified manuscript is a LaTeX package. A compiled PDF is not included in this public build because the build environment had no TeX engine. The page keeps the abstract, verified tables, figures and a public-safe copy of the LaTeX source. The training code, checkpoints and raw logs stay in the private research repository.</p>
+  <div class="button-row">
+    <a href="paper.html">Read the paper summary</a>
+    <a href="paper/tetris-paper-overleaf.zip" class="secondary">Download LaTeX source (ZIP)</a>
+  </div>
+
+  <div class="callout blue"><b>AI-assistance disclosure:</b> the author used an AI coding assistant (opencode with DeepSeek-V4.1-Flash) to help develop code, run experiments, compute statistics, prepare figures and draft text. The assistant is not an author. Every reported number was traced back to the final result files, and the author remains responsible for the work.</div>
+
+  <h2>Cite</h2>
+  <pre>@misc{erkenzhe2026tetrisrl,
+  title  = {Tetris RL Arena: Afterstate Reinforcement Learning under Execution Noise},
+  author = {Erkenzhe},
+  note   = {FRP 2026, AI Engineering track, ISSAI, Nazarbayev University},
+  year   = {2026},
+  url    = {https://yerkenje.github.io/tetris-rl-arena-page/}
+}</pre>
+
+  <footer>Made at the ISSAI Fall Research Program 2026 · Page and replay viewer are static HTML, CSS and JavaScript. No model calls, no analytics, no external libraries.</footer>
+</main>
+</body>
+</html>
